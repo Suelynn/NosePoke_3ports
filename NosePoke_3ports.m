@@ -36,18 +36,26 @@ if isempty(fieldnames(TaskParameters))
     TaskParameters.GUIPanels.Sampling = {'MinSampleTime','MaxSampleTime','AutoIncrSample','MinSampleIncr','MinSampleDecr','EarlyWithdrawalTimeOut','EarlyWithdrawalNoise','GracePeriod','SampleTime'};
     
     %Reward
-    TaskParameters.GUI.rewardAmountL = 10;
-    TaskParameters.GUI.rewardAmountC = 20;
-    TaskParameters.GUI.rewardAmountR = 35;
+    TaskParameters.GUI.rewardAmountL = 15;
+    TaskParameters.GUI.rewardAmountC = 30;
+    TaskParameters.GUI.rewardAmountR = 50;
+    TaskParameters.GUIMeta.CenterReward.Style = 'checkbox';
+    TaskParameters.GUI.CenterReward=true;
+    TaskParameters.GUI.CenterRewardAmount=10;
     
-    TaskParameters.GUIPanels.Reward = {'rewardAmountL','rewardAmountC','rewardAmountR'};
+    TaskParameters.GUIPanels.Reward = {'rewardAmountL','rewardAmountC','rewardAmountR','CenterReward','CenterRewardAmount'};
         
     %Reward Delay
     TaskParameters.GUI.RewardDelay = 0;
     TaskParameters.GUIMeta.RewardDelayExp.Style = 'checkbox';
-    TaskParameters.GUIMeta.RewardDelayExp = false;
+    TaskParameters.GUI.RewardDelayExp = false;
+    TaskParameters.GUIMeta.TimeInvestment.Style = 'checkbox';
+    TaskParameters.GUI.TimeInvestment = false;
+    TaskParameters.GUI.FeedbackDelay1=0.1;
+    TaskParameters.GUI.FeedbackDelay2=0.5;
+    TaskParameters.GUI.FeedbackDelay3=1;
     
-    TaskParameters.GUIPanels.RewardDelay = {'RewardDelay'};
+    TaskParameters.GUIPanels.RewardDelay = {'RewardDelay','RewardDelayExp','TimeInvestment','FeedbackDelay1','FeedbackDelay2','FeedbackDelay3'};
   
 
         
@@ -77,6 +85,13 @@ BpodSystem.Data.Custom = orderfields(BpodSystem.Data.Custom);
 [~,BpodSystem.Data.Custom.Rig] = system('hostname');
 [~,BpodSystem.Data.Custom.Subject] = fileparts(fileparts(fileparts(fileparts(BpodSystem.DataPath))));
 BpodSystem.Data.Custom.PsychtoolboxStartup=false;
+
+%% Configuring PulsePal
+load PulsePalParamStimulus.mat
+load PulsePalParamFeedback.mat
+BpodSystem.Data.Custom.PulsePalParamStimulus=PulsePalParamStimulus;
+BpodSystem.Data.Custom.PulsePalParamFeedback=PulsePalParamFeedback;
+clear PulsePalParamFeedback PulsePalParamStimulus
 
 BpodSystem.SoftCodeHandlerFunction = 'SoftCodeHandler';
 
@@ -148,6 +163,10 @@ bRightPortIn = strcat('Port', num2str(bRightPort),'In');
 bLeftValve = 2^(bLeftPort-1);
 bCenterValve = 2^(bCenterPort-1);
 bRightValve = 2^(bRightPort-1);
+CenterValve = 2^(CenterPort-1);
+
+
+
 
 %%
 
@@ -155,6 +174,11 @@ bRightValve = 2^(bRightPort-1);
 bLeftValveTime  = GetValveTimes(TaskParameters.GUI.rewardAmountL, bLeftPort);
 bCenterValveTime  = GetValveTimes(TaskParameters.GUI.rewardAmountC, bCenterPort);
 bRightValveTime  = GetValveTimes(TaskParameters.GUI.rewardAmountR, bRightPort);
+
+if TaskParameters.GUI.CenterReward
+    CenterValveTime  = GetValveTimes(TaskParameters.GUI.CenterRewardAmount, CenterPort);
+    
+end
 
 
 
@@ -168,28 +192,34 @@ if find(BpodSystem.Data.Custom.LightOn(iTrial,:))==1
     operantState='left_on';
     operantAction=bLeftPortIn;
     operantLight=strcat('PWM',num2str(bLeftPort));
+    beep={'SoftCode',13};
     
     rewardState='bLeftPort_Reward';
     gracePokeOutAction=bLeftPortout;
     gracePokeInAction=bLeftPortIn;
+    FeedbackDelay=TaskParameters.GUI.FeedbackDelay1;
     
 elseif find(BpodSystem.Data.Custom.LightOn(iTrial,:))==2
     operantState='center_on';
     operantAction=bCenterPortIn;
     operantLight=strcat('PWM',num2str(bCenterPort));
+    beep={'SoftCode',14};
     
     rewardState='bCenterPort_Reward';
     gracePokeOutAction=bCenterPortout;
     gracePokeInAction=bCenterPortIn;
+    FeedbackDelay=TaskParameters.GUI.FeedbackDelay2;
     
 elseif find(BpodSystem.Data.Custom.LightOn(iTrial,:))==3
     operantState='right_on';
     operantAction=bRightPortIn;
     operantLight=strcat('PWM',num2str(bRightPort));
+    beep={'SoftCode',15};
     
     rewardState='bRightPort_Reward';
     gracePokeOutAction=bRightPortout;
     gracePokeInAction=bRightPortIn;
+    FeedbackDelay=TaskParameters.GUI.FeedbackDelay2;
     
 else
     operantState='left_on';
@@ -199,10 +229,11 @@ else
     rewardState='bLeftPort_Reward';
     gracePokeOutAction=bLeftPortout;
     gracePokeInAction=bLeftPortIn;
+   
 end
 
 
-if TaskParameters.GUIMeta.RewardDelayExp
+if TaskParameters.GUI.RewardDelayExp
     BpodSystem.Data.rewardDelay(iTrial)=exprnd(TaskParameters.GUI.RewardDelay);
 else
     BpodSystem.Data.rewardDelay(iTrial)=TaskParameters.GUI.RewardDelay;
@@ -210,7 +241,12 @@ else
 end
 
 sma = NewStateMatrix();
-sma = SetGlobalTimer(sma,1,TaskParameters.GUI.SampleTime);
+
+if TaskParameters.GUI.TimeInvestment
+    sma = SetGlobalTimer(sma,1,FeedbackDelay);
+else
+    sma = SetGlobalTimer(sma,1,TaskParameters.GUI.SampleTime);
+end
 sma = SetGlobalTimer(sma,2,BpodSystem.Data.rewardDelay(iTrial));
 sma = AddState(sma, 'Name', 'state_0',...
     'Timer', 0,...
@@ -225,25 +261,50 @@ sma = AddState(sma, 'Name', 'wait_Cin',...
     'StateChangeConditions', {CenterPortIn, 'StartSampling'},...
     'OutputActions', {strcat('PWM',num2str(CenterPort)),255});
 
+if TaskParameters.GUI.CenterReward
+    
+sma = AddState(sma, 'Name', 'StartSampling',...
+    'Timer', CenterValveTime,...
+    'StateChangeConditions', {'Tup', 'Sampling'},...
+    'OutputActions', {'GlobalTimerTrig',1, 'ValveState', CenterValve});
+
+else
+    
 sma = AddState(sma, 'Name', 'StartSampling',...
     'Timer', 0.01,...
     'StateChangeConditions', {'Tup', 'Sampling'},...S
     'OutputActions', {'GlobalTimerTrig',1});
-sma = AddState(sma, 'Name', 'Sampling',...
-    'Timer', TaskParameters.GUI.SampleTime,...
+end
+
+if TaskParameters.GUI.TimeInvestment
+    
+    sma = AddState(sma, 'Name', 'Sampling',...
+    'Timer',FeedbackDelay,...
     'StateChangeConditions', {CenterPortOut, 'GracePeriod','Tup','wait_action','GlobalTimer1_End','wait_action'},...
     'OutputActions', {});
-sma = AddState(sma, 'Name', 'GracePeriod',...
-    'Timer', TaskParameters.GUI.GracePeriod,...
-    'StateChangeConditions', {CenterPortIn, 'Sampling','Tup','EarlyWithdrawal','GlobalTimer1_End','EarlyWithdrawal'...,
-    bLeftPortIn,'EarlyWithdrawal',bCenterPortIn,'EarlyWithdrawal',bRightPortIn,'EarlyWithdrawal'},...
-    'OutputActions',{});
+    sma = AddState(sma, 'Name', 'GracePeriod',...
+        'Timer', TaskParameters.GUI.GracePeriod,...
+        'StateChangeConditions', {CenterPortIn, 'Sampling','Tup','EarlyWithdrawal','GlobalTimer1_End','EarlyWithdrawal'...,
+        bLeftPortIn,'EarlyWithdrawal',bCenterPortIn,'EarlyWithdrawal',bRightPortIn,'EarlyWithdrawal'},...
+        'OutputActions',{});
+else
+
+    sma = AddState(sma, 'Name', 'Sampling',...
+        'Timer', TaskParameters.GUI.SampleTime,...
+        'StateChangeConditions', {CenterPortOut, 'GracePeriod','Tup','wait_action','GlobalTimer1_End','wait_action'},...
+        'OutputActions', {});
+    sma = AddState(sma, 'Name', 'GracePeriod',...
+        'Timer', TaskParameters.GUI.GracePeriod,...
+        'StateChangeConditions', {CenterPortIn, 'Sampling','Tup','EarlyWithdrawal','GlobalTimer1_End','EarlyWithdrawal'...,
+        bLeftPortIn,'EarlyWithdrawal',bCenterPortIn,'EarlyWithdrawal',bRightPortIn,'EarlyWithdrawal'},...
+        'OutputActions',{});
+end
 
 %%
 sma = AddState(sma, 'Name', 'wait_action',...
     'Timer',TaskParameters.GUI.ChoiceDeadline,...
     'StateChangeConditions', {operantAction,operantState},...
-    'OutputActions',{operantLight,255});
+    'OutputActions',[{operantLight,255}, beep]);
 
 sma = AddState(sma, 'Name', 'left_on',...
     'Timer',0,...

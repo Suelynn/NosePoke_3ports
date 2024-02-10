@@ -13,10 +13,29 @@ if softCode > 10 && softCode < 21 %for auditory clicks
             ProgramPulsePal(BpodSystem.Data.Custom.PulsePalParamStimulus);
         elseif softCode == 12 %beep on chan 2
             ProgramPulsePal(BpodSystem.Data.Custom.PulsePalParamFeedback);
-            SendCustomPulseTrain(2,0:.001:.3,(ones(1,301)*3));  % Beep on channel 1+2
+            SendCustomPulseTrain(2,0:.00:.3,(ones(1,301)*3));  % Beep on channel 1+2
             SendCustomPulseTrain(1,0:.001:.3,(ones(1,301)*3));
             TriggerPulsePal(1,2);
             ProgramPulsePal(BpodSystem.Data.Custom.PulsePalParamStimulus);
+            
+        elseif softCode==15 %highest beep corresponds to largest reward
+            ProgramPulsePal(BpodSystem.Data.Custom.PulsePalParamFeedback);
+            SendCustomPulseTrain(2,0:.0004:.3,(ones(1,751)*3));  % Beep on channel 1+2
+            SendCustomPulseTrain(1,0:.0004:.3,(ones(1,751)*3));  % Beep on channel 1+2
+            TriggerPulsePal(1,2);
+            
+        elseif softCode==14 
+            ProgramPulsePal(BpodSystem.Data.Custom.PulsePalParamFeedback);
+            SendCustomPulseTrain(2,0:.0006:.3,(ones(1,501)*3));  % Beep on channel 1+2
+            SendCustomPulseTrain(1,0:.0006:.3,(ones(1,501)*3));
+            TriggerPulsePal(1,2);
+            
+        elseif softCode==13
+            ProgramPulsePal(BpodSystem.Data.Custom.PulsePalParamFeedback);
+            SendCustomPulseTrain(2,0:.0009:.3,(ones(1,334)*3));  % Beep on channel 1+2
+            SendCustomPulseTrain(1,0:.0009:.3,(ones(1,334)*3));
+            TriggerPulsePal(1,2);
+         
         end
     end
 end
